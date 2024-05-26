@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Cube with Sensor Data</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+    }
+    .btn-success, .btn-danger {
+      padding: 10px 20px;
+      border: none;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .btn-success {
+      background-color: green;
+      color: white;
+    }
+    .btn-danger {
+      background-color: red;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <button id="start_demo" class="btn-success">Start demo</button>
+    <div id="ws_info"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    let scene, camera, renderer, cube;
+    let is_running = false;
+    let ws;
+
+    let orientation = { alpha: 0, beta: 0, gamma: 0 };
+    let accelerometer = { x: 0, y: 0, z: 0 };
+    const smoothingFactor = 0.1;
+
+    function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const geometry = new THREE.BoxGeometry();
+      const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+      cube = new THREE.Mesh(geometry, material);
+      scene.add(cube);
+
+      camera.position.z = 5;
+
+      animate();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      cube.rotation.x += (THREE.Math.degToRad(orientation.beta) - cube.rotation.x) * smoothingFactor;
+      cube.rotation.y += (THREE.Math.degToRad(orientation.gamma) - cube.rotation.y) * smoothingFactor;
+      cube.rotation.z += (THREE.Math.degToRad(orientation.alpha) - cube.rotation.z) * smoothingFactor;
+
+      cube.position.x += (accelerometer.x - cube.position.x) * smoothingFactor;
+      cube.position.y += (accelerometer.y - cube.position.y) * smoothingFactor;
+      cube.position.z += (accelerometer.z - cube.position.z) * smoothingFactor;
+
+      const sensorData = JSON.stringify({
+        orientation: orientation,
+        accelerometer: accelerometer
+      });
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(sensorData);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    function handleOrientation(event) {
+      orientation.alpha = event.alpha;
+      orientation.beta = event.beta;
+      orientation.gamma = event.gamma;
+    }
+
+    function handleMotion(event) {
+      accelerometer.x = event.accelerationIncludingGravity.x;
+      accelerometer.y = event.accelerationIncludingGravity.y;
+      accelerometer.z = event.accelerationIncludingGravity.z;
+    }
+
+    let demo_button = document.getElementById("start_demo");
+    demo_button.onclick = function(e) {
+      e.preventDefault();
+
+      if (DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === "function") {
+        DeviceMotionEvent.requestPermission().then(response => {
+          if (response === 'granted') {
+            startDemo();
+          }
+        }).catch(console.error);
+      } else {
+        startDemo();
+      }
+    };
+
+    function startDemo() {
+      if (is_running) {
+        window.removeEventListener("devicemotion", handleMotion);
+        window.removeEventListener("deviceorientation", handleOrientation);
+        demo_button.innerHTML = "Start demo";
+        demo_button.classList.add('btn-success');
+        demo_button.classList.remove('btn-danger');
+        is_running = false;
+        if (ws) {
+          ws.close();
+        }
+        console.log('Demo stopped');
+      } else {
+        window.addEventListener("devicemotion", handleMotion);
+        window.addEventListener("deviceorientation", handleOrientation);
+        demo_button.innerHTML = "Stop demo";
+        demo_button.classList.remove('btn-success');
+        demo_button.classList.add('btn-danger');
+        is_running = true;
+        ws = new WebSocket('ws://localhost:8080');
+        ws.onopen = () => {
+          document.getElementById("ws_info").innerText = 'WebSocket connected';
+          console.log('WebSocket connected');
+        };
+        ws.onclose = () => {
+          document.getElementById("ws_info").innerText = 'WebSocket disconnected';
+          console.log('WebSocket disconnected');
+        };
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
+        console.log('Demo started');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
