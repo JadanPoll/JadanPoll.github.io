@@ -32,40 +32,19 @@ async function startVideoCall() {
         remotePeerConnection.addEventListener('track', handleRemoteTrack);
 
         // Set up media negotiation
-        localPeerConnection.createOffer().then(offer => localPeerConnection.setLocalDescription(offer));
-        localPeerConnection.onicecandidate = event => {
-            if (event.candidate) {
-                remotePeerConnection.addIceCandidate(event.candidate);
-            }
-        };
-
-        // Set remote description when offer is received from local
-        localPeerConnection.onicecandidate = async (event) => {
-            try {
-                await remotePeerConnection.setRemoteDescription(event.candidate);
-            } catch (error) {
-                console.error('Error setting remote description:', error);
-            }
-        };
-
-        // Create answer when offer is received from local
-        remotePeerConnection.onicecandidate = async (event) => {
-            try {
-                if (event.candidate) {
-                    await localPeerConnection.addIceCandidate(event.candidate);
-                }
-            } catch (error) {
-                console.error('Error adding ICE candidate:', error);
-            }
-        };
-
         const offer = await localPeerConnection.createOffer();
         await localPeerConnection.setLocalDescription(offer);
-        await remotePeerConnection.setRemoteDescription(offer);
 
-        const answer = await remotePeerConnection.createAnswer();
-        await remotePeerConnection.setLocalDescription(answer);
-        await localPeerConnection.setRemoteDescription(answer);
+        // Display SDP offer string in alert
+        alert('SDP Offer:\n' + JSON.stringify(localPeerConnection.localDescription, null, 2));
+
+        // Manually share ICE candidates with other participant
+        localPeerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                const candidateString = JSON.stringify(event.candidate);
+                console.log('ICE Candidate:', candidateString);
+            }
+        };
 
     } catch (error) {
         console.error('Error starting video call:', error);
