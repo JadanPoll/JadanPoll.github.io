@@ -38,6 +38,35 @@ async function startVideoCall() {
                 remotePeerConnection.addIceCandidate(event.candidate);
             }
         };
+
+        // Set remote description when offer is received from local
+        localPeerConnection.onicecandidate = async (event) => {
+            try {
+                await remotePeerConnection.setRemoteDescription(event.candidate);
+            } catch (error) {
+                console.error('Error setting remote description:', error);
+            }
+        };
+
+        // Create answer when offer is received from local
+        remotePeerConnection.onicecandidate = async (event) => {
+            try {
+                if (event.candidate) {
+                    await localPeerConnection.addIceCandidate(event.candidate);
+                }
+            } catch (error) {
+                console.error('Error adding ICE candidate:', error);
+            }
+        };
+
+        const offer = await localPeerConnection.createOffer();
+        await localPeerConnection.setLocalDescription(offer);
+        await remotePeerConnection.setRemoteDescription(offer);
+
+        const answer = await remotePeerConnection.createAnswer();
+        await remotePeerConnection.setLocalDescription(answer);
+        await localPeerConnection.setRemoteDescription(answer);
+
     } catch (error) {
         console.error('Error starting video call:', error);
     }
